@@ -14,7 +14,8 @@ and regenerate this repository instead.
 The generated workflow builds Racket on `windows-2022` for `x86_64` and uploads
 `racket9-9.2.1.1-windows-x86_64.zip` as a GitHub Actions artifact. It runs `nmake all` before the
 configured `nmake` target so a clean CI checkout never tries to install missing
-build outputs. Release asset publishing is
+build outputs. The portable archive copies only the installed runtime tree, not
+the source/build tree. Release asset publishing is
 disabled unless `windows-ci-config.rktd` enables `publish-release`.
 
 ## Regenerate
