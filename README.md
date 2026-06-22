@@ -12,8 +12,8 @@ and regenerate this repository instead.
 ## Build
 
 The generated workflow builds Racket on `windows-2022` for `x86_64` and uploads
-`racket9-9.2.1.1-windows-x86_64.zip` as a GitHub Actions artifact. Release asset publishing is disabled
-unless `windows-ci-config.rktd` enables `publish-release`.
+`racket9-9.2.1.1-windows-x86_64.zip` as a GitHub Actions artifact. Release asset publishing is
+disabled unless `windows-ci-config.rktd` enables `publish-release`.
 
 ## Regenerate
 
