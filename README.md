@@ -15,8 +15,7 @@ The generated workflow builds Racket on `windows-2022` for `x86_64` and uploads
 `racket9-9.2.1.1-windows-x86_64.zip` as a GitHub Actions artifact. It runs `nmake all` before the
 configured `nmake` target so a clean CI checkout never tries to install missing
 build outputs. The portable archive copies only the installed runtime tree, not
-the source/build tree. Release asset publishing is
-disabled unless `windows-ci-config.rktd` enables `publish-release`.
+the source/build tree. Release asset publishing is enabled. The workflow uploads `racket9-9.2.1.1-windows-x86_64.zip` to `CutieDeng/win-racket` release `v9.2.1` using the `GITHUB_TOKEN` repository secret.
 
 ## Regenerate
 

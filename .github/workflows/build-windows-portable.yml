@@ -218,3 +218,43 @@ jobs:
           name: 'windows-x86_64'
           path: artifacts/*.zip
           if-no-files-found: error
+
+  publish-windows-portable:
+    needs: build-windows-portable
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download Windows portable artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: 'windows-x86_64'
+          path: release-assets
+
+      - name: Publish Windows portable release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REPO: 'CutieDeng/win-racket'
+          RELEASE_TAG: 'v9.2.1'
+          RELEASE_NAME: 'Racket 9.2.1 Windows portable'
+          CREATE_RELEASE: 'true'
+        run: |
+          set -euo pipefail
+          command -v gh >/dev/null 2>&1 || { echo 'gh CLI is required on the publish runner'; exit 1; }
+          mapfile -t zip_files < <(find "$GITHUB_WORKSPACE/release-assets" -maxdepth 1 -name '*.zip' -type f | sort)
+          if [ "${#zip_files[@]}" -ne 1 ]; then
+            printf 'Expected exactly one Windows portable zip, got %s\n' "${#zip_files[@]}"
+            printf '  %s\n' "${zip_files[@]}"
+            exit 1
+          fi
+          if ! gh release view "$RELEASE_TAG" -R "$RELEASE_REPO" >/dev/null 2>&1; then
+            if [ "$CREATE_RELEASE" != true ]; then
+              echo "GitHub release does not exist and create-release is false: $RELEASE_REPO $RELEASE_TAG"
+              exit 1
+            fi
+            gh release create "$RELEASE_TAG" -R "$RELEASE_REPO" --title "$RELEASE_NAME" --notes "Generated Windows portable Racket artifact."
+          fi
+          gh release upload "$RELEASE_TAG" -R "$RELEASE_REPO" "${zip_files[0]}" --clobber
