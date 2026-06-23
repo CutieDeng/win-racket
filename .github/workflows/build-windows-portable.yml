@@ -1,5 +1,5 @@
 # GENERATED WINDOWS PORTABLE PACKAGING METADATA - DO NOT EDIT.
-# Source of truth: /Users/cutiedeng/Y2026/M06/D21/package-racket
+# Source of truth: https://github.com/CutieDeng/package-racket
 # Humans and LLM agents must change package-racket and regenerate; manual workflow edits are not production-safe.
 
 name: windows portable build
