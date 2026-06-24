@@ -22,10 +22,10 @@ jobs:
     env:
       PACKAGE_NAME: 'racket9'
       SOURCE_VERSION: '9.2.1'
-      FORMULA_VERSION: '9.2.1.5'
+      FORMULA_VERSION: '9.2.1.6'
       SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.2.1/racket-minimal-9.2.1-src.tgz'
       SOURCE_SHA256: '133e445460bf21862eeae9314441711f109ba4ca7561c17c7d2132a0eaf012fc'
-      ZIP_NAME: 'racket9-9.2.1.5-windows-x86_64.zip'
+      ZIP_NAME: 'racket9-9.2.1.6-windows-x86_64.zip'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'x64'
