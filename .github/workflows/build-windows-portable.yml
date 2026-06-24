@@ -26,6 +26,7 @@ jobs:
       SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.2.1/racket-minimal-9.2.1-src.tgz'
       SOURCE_SHA256: '133e445460bf21862eeae9314441711f109ba4ca7561c17c7d2132a0eaf012fc'
       ZIP_NAME: 'racket9-9.2.1.6-windows-x86_64.zip'
+      EXE_NAME: 'racket9-9.2.1.6-windows-x86_64-setup.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'x64'
@@ -139,6 +140,22 @@ jobs:
             throw "nmake build failed with exit $LASTEXITCODE"
           }
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress --yes
+          $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
+          $iscc = Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            $iscc = Get-ChildItem $programFilesX86 -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue |
+              Sort-Object FullName |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (!$iscc -or !(Test-Path $iscc)) {
+            throw "ISCC.exe not found after installing Inno Setup"
+          }
+          "ISCC_EXE=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Assemble portable zip
         shell: pwsh
         run: |
@@ -212,11 +229,198 @@ jobs:
           }
           Get-FileHash $artifactPath -Algorithm SHA256
 
-      - name: Upload Windows portable artifact
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          $portableRoot = Join-Path "portable" $env:PORTABLE_DIR
+          if (!(Test-Path $portableRoot)) {
+            throw "portable tree missing: $portableRoot"
+          }
+          @'
+          param(
+            [Parameter(Mandatory=$true)] [string] $InstallRoot,
+            [Parameter(Mandatory=$true)] [string] $CacheRoot
+          )
+
+          $ErrorActionPreference = 'Stop'
+
+          function Test-DirectoryEmpty([string] $Path) {
+            if (!(Test-Path -LiteralPath $Path)) { return $true }
+            return -not (Get-ChildItem -LiteralPath $Path -Force -ErrorAction Stop | Select-Object -First 1)
+          }
+
+          $CacheRoot = [IO.Path]::GetFullPath($CacheRoot)
+          $root = [IO.Path]::GetPathRoot($CacheRoot).TrimEnd('\')
+          if ([string]::IsNullOrWhiteSpace($CacheRoot) -or ($CacheRoot.TrimEnd('\') -eq $root)) {
+            throw "Refusing unsafe cache path: $CacheRoot"
+          }
+
+          $marker = Join-Path $CacheRoot '.racket-installer-cache'
+          if ((Test-Path -LiteralPath $CacheRoot) -and
+              !(Test-Path -LiteralPath $marker) -and
+              !(Test-DirectoryEmpty $CacheRoot)) {
+            throw "Cache path exists and is not empty or installer-owned: $CacheRoot"
+          }
+
+          New-Item -ItemType Directory -Force $CacheRoot | Out-Null
+          Set-Content -LiteralPath $marker -Value 'Racket installer owned cache directory' -Encoding ASCII
+
+          $configPath = Join-Path $InstallRoot 'etc\config.rktd'
+          if (!(Test-Path -LiteralPath $configPath)) {
+            throw "Racket config not found: $configPath"
+          }
+          $configText = Get-Content -LiteralPath $configPath -Raw
+          foreach ($key in @('default-scope', 'compiled-file-cache-roots', 'compiled-file-system-cache-root')) {
+            $pattern = '\s*\(' + [regex]::Escape($key) + '\s+\.\s+("[^"]*"|\([^)]*\)|[^)]*)\)'
+            $configText = [regex]::Replace($configText, $pattern, '')
+          }
+          $cacheForConfig = $CacheRoot.Replace('\', '/').Replace('"', '\"')
+          $entries = ' (default-scope . "installation") (compiled-file-cache-roots . (user system)) (compiled-file-system-cache-root . "' + $cacheForConfig + '")'
+          $configText = [regex]::Replace($configText, '\s*\)\)\s*$', $entries + "))`r`n")
+          if ($configText -notmatch '\(compiled-file-system-cache-root \.' ) {
+            throw 'Unable to configure Racket system cache root'
+          }
+          Set-Content -LiteralPath $configPath -Value $configText -Encoding UTF8
+
+          $racoExe = Join-Path $InstallRoot 'raco.exe'
+          $racketExe = Join-Path $InstallRoot 'Racket.exe'
+          if (Test-Path -LiteralPath $racoExe) {
+            & $racoExe setup --system --no-user --reset-cache -D --no-pkg-deps
+          } elseif (Test-Path -LiteralPath $racketExe) {
+            & $racketExe -N raco -l- raco setup --system --no-user --reset-cache -D --no-pkg-deps
+          } else {
+            throw "Neither raco.exe nor Racket.exe exists in $InstallRoot"
+          }
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          '@ | Set-Content -Path (Join-Path $portableRoot "installer-configure.ps1") -Encoding UTF8
+
+          $outputBase = [IO.Path]::GetFileNameWithoutExtension($env:EXE_NAME)
+          @"
+          [Setup]
+          AppId=racket9
+          AppName=Racket
+          AppVersion=$env:FORMULA_VERSION
+          DefaultDirName={autopf}\Racket9
+          DefaultGroupName=Racket 9
+          DisableProgramGroupPage=yes
+          OutputDir=artifacts
+          OutputBaseFilename=$outputBase
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=admin
+          WizardStyle=modern
+
+          [Files]
+          Source: "portable\$env:PORTABLE_DIR\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{group}\Racket"; Filename: "{app}\Racket.exe"
+          Name: "{group}\Uninstall Racket"; Filename: "{uninstallexe}"
+
+          [Code]
+          var
+            CachePage: TInputDirWizardPage;
+            CacheDefaultRoot: String;
+
+          function DefaultCacheRoot(): String;
+          begin
+            Result := ExpandConstant('{app}\var\cache\racket\compiled');
+          end;
+
+          function GetCacheRoot(Param: String): String;
+          var
+            Value: String;
+          begin
+            Value := ExpandConstant('{param:CACHEPATH|}');
+            if Value <> '' then
+              Result := Value
+            else if Assigned(CachePage) then
+              Result := CachePage.Values[0]
+            else
+              Result := DefaultCacheRoot();
+          end;
+
+          procedure InitializeWizard;
+          begin
+            CachePage := CreateInputDirPage(wpSelectDir, 'Racket Cache Directory',
+              'Choose the compiled cache directory.',
+              'Racket builds the system cache during installation. For unattended installs, pass /CACHEPATH=...',
+              False, '');
+            CachePage.Add('');
+            CacheDefaultRoot := DefaultCacheRoot();
+            CachePage.Values[0] := CacheDefaultRoot;
+          end;
+
+          procedure CurPageChanged(CurPageID: Integer);
+          begin
+            if Assigned(CachePage) and (CurPageID = CachePage.ID) then
+              if (CachePage.Values[0] = '') or (CachePage.Values[0] = CacheDefaultRoot) then begin
+                CacheDefaultRoot := DefaultCacheRoot();
+                CachePage.Values[0] := CacheDefaultRoot;
+              end;
+          end;
+
+          function NextButtonClick(CurPageID: Integer): Boolean;
+          begin
+            Result := True;
+            if Assigned(CachePage) and (CurPageID = CachePage.ID) and (Trim(CachePage.Values[0]) = '') then begin
+              MsgBox('Cache path is required.', mbError, MB_OK);
+              Result := False;
+            end;
+          end;
+
+          procedure CurStepChanged(CurStep: TSetupStep);
+          var
+            ResultCode: Integer;
+            Params: String;
+          begin
+            if CurStep = ssPostInstall then begin
+              if not RegWriteStringValue(HKLM, 'Software\Racket9', 'CacheRoot', GetCacheRoot('')) then
+                RaiseException('Failed to save Racket cache path.');
+              Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer-configure.ps1') +
+                '" -InstallRoot "' + ExpandConstant('{app}') + '" -CacheRoot "' + GetCacheRoot('') + '"';
+              if not Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+                RaiseException('Failed to run Racket cache setup.');
+              if ResultCode <> 0 then
+                RaiseException('Racket cache setup failed with exit code ' + IntToStr(ResultCode) + '.');
+            end;
+          end;
+
+          procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+          var
+            CacheRoot: String;
+          begin
+            if CurUninstallStep = usUninstall then begin
+              if RegQueryStringValue(HKLM, 'Software\Racket9', 'CacheRoot', CacheRoot) then begin
+                if FileExists(AddBackslash(CacheRoot) + '.racket-installer-cache') then
+                  DelTree(CacheRoot, True, True, True);
+              end;
+              RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Racket9');
+            end;
+          end;
+          "@ | Set-Content -Path racket-installer.iss -Encoding UTF8
+
+          & $env:ISCC_EXE racket-installer.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit $LASTEXITCODE"
+          }
+          $installerPath = Join-Path "artifacts" $env:EXE_NAME
+          if (!(Test-Path $installerPath) -or (Get-Item $installerPath).Length -le 0) {
+            throw "installer exe missing or empty: $installerPath"
+          }
+          Get-FileHash $installerPath -Algorithm SHA256
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
           name: 'windows-x86_64'
-          path: artifacts/*.zip
+          path: |
+            artifacts/*.zip
+            artifacts/*.exe
           if-no-files-found: error
 
   publish-windows-portable:
@@ -233,7 +437,7 @@ jobs:
           name: 'windows-x86_64'
           path: release-assets
 
-      - name: Publish Windows portable release asset
+      - name: Publish Windows release assets
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -245,9 +449,15 @@ jobs:
           set -euo pipefail
           command -v gh >/dev/null 2>&1 || { echo 'gh CLI is required on the publish runner'; exit 1; }
           mapfile -t zip_files < <(find "$GITHUB_WORKSPACE/release-assets" -maxdepth 1 -name '*.zip' -type f | sort)
+          mapfile -t exe_files < <(find "$GITHUB_WORKSPACE/release-assets" -maxdepth 1 -name '*.exe' -type f | sort)
           if [ "${#zip_files[@]}" -ne 1 ]; then
             printf 'Expected exactly one Windows portable zip, got %s\n' "${#zip_files[@]}"
             printf '  %s\n' "${zip_files[@]}"
+            exit 1
+          fi
+          if [ "${#exe_files[@]}" -ne 1 ]; then
+            printf 'Expected exactly one Windows installer exe, got %s\n' "${#exe_files[@]}"
+            printf '  %s\n' "${exe_files[@]}"
             exit 1
           fi
           if ! gh release view "$RELEASE_TAG" -R "$RELEASE_REPO" >/dev/null 2>&1; then
@@ -255,6 +465,6 @@ jobs:
               echo "GitHub release does not exist and create-release is false: $RELEASE_REPO $RELEASE_TAG"
               exit 1
             fi
-            gh release create "$RELEASE_TAG" -R "$RELEASE_REPO" --title "$RELEASE_NAME" --notes "Generated Windows portable Racket artifact."
+            gh release create "$RELEASE_TAG" -R "$RELEASE_REPO" --title "$RELEASE_NAME" --notes "Generated Windows Racket artifacts."
           fi
-          gh release upload "$RELEASE_TAG" -R "$RELEASE_REPO" "${zip_files[0]}" --clobber
+          gh release upload "$RELEASE_TAG" -R "$RELEASE_REPO" "${zip_files[0]}" "${exe_files[0]}" --clobber
