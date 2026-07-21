@@ -12,12 +12,12 @@ and regenerate this repository instead.
 ## Build
 
 The generated workflow builds Racket on `windows-2022` for `x86_64` and uploads
-`racket9-9.2.4.2-windows-x86_64.zip` and `racket9-9.2.4.2-windows-x86_64-setup.exe` as GitHub Actions artifacts. It runs `nmake all` before the
+`racket9-9.2.4.3-windows-x86_64.zip` and `racket9-9.2.4.3-windows-x86_64-setup.exe` as GitHub Actions artifacts. It runs `nmake all` before the
 configured `nmake` target so a clean CI checkout never tries to install missing
 build outputs. The portable archive and Inno Setup installer copy only the
 installed runtime tree, not the source/build tree. The installer accepts
 `/DIR=...` for the install path and `/CACHEPATH=...` for the Racket cache path;
-the default cache path is inside the install directory. Release asset publishing is enabled. The workflow uploads `racket9-9.2.4.2-windows-x86_64.zip` and `racket9-9.2.4.2-windows-x86_64-setup.exe` to `CutieDeng/win-racket` release `v9.2.4` using the `GITHUB_TOKEN` repository secret.
+the default cache path is inside the install directory. Release asset publishing is enabled. The workflow uploads `racket9-9.2.4.3-windows-x86_64.zip` and `racket9-9.2.4.3-windows-x86_64-setup.exe` to `CutieDeng/win-racket` release `v9.2.4` using the `GITHUB_TOKEN` repository secret.
 
 ## Regenerate
 
