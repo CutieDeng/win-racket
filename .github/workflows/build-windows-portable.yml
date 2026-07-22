@@ -22,11 +22,11 @@ jobs:
     env:
       PACKAGE_NAME: 'racket9'
       SOURCE_VERSION: '9.2.5'
-      FORMULA_VERSION: '9.2.5.2'
+      FORMULA_VERSION: '9.2.5.3'
       SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.2.5/racket-minimal-9.2.5-src.tgz'
-      SOURCE_SHA256: 'e025b4d06a31b808697104354722016044a2dc40b9b742f29be8ff94b808310f'
-      ZIP_NAME: 'racket9-9.2.5.2-windows-x86_64.zip'
-      EXE_NAME: 'racket9-9.2.5.2-windows-x86_64-setup.exe'
+      SOURCE_SHA256: 'a44ea98041383b97e1740ff8a809d784fa8c6a6702d815cd9e69683fd7254171'
+      ZIP_NAME: 'racket9-9.2.5.3-windows-x86_64.zip'
+      EXE_NAME: 'racket9-9.2.5.3-windows-x86_64-setup.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'x64'
@@ -274,6 +274,7 @@ jobs:
             $pattern = '\s*\(' + [regex]::Escape($key) + '\s+\.\s+("[^"]*"|\([^)]*\)|[^)]*)\)'
             $configText = [regex]::Replace($configText, $pattern, '')
           }
+          $configText = $configText.Replace('"../../share/racket/self-catalog"', '"../share/self-catalog"')
           $cacheForConfig = $CacheRoot.Replace('\', '/').Replace('"', '\"')
           $entries = ' (default-scope . "installation") (compiled-file-cache-roots . (user system)) (compiled-file-system-cache-root . "' + $cacheForConfig + '")'
           $configText = [regex]::Replace($configText, '\s*\)\)\s*$', $entries + "))`r`n")
