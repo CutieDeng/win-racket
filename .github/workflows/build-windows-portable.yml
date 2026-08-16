@@ -21,12 +21,12 @@ jobs:
       contents: read
     env:
       PACKAGE_NAME: 'racket9'
-      SOURCE_VERSION: '9.2.5'
-      FORMULA_VERSION: '9.2.5.3'
-      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.2.5/racket-minimal-9.2.5-src.tgz'
-      SOURCE_SHA256: 'a44ea98041383b97e1740ff8a809d784fa8c6a6702d815cd9e69683fd7254171'
-      ZIP_NAME: 'racket9-9.2.5.3-windows-x86_64.zip'
-      EXE_NAME: 'racket9-9.2.5.3-windows-x86_64-setup.exe'
+      SOURCE_VERSION: '9.3.1'
+      FORMULA_VERSION: '9.3.1.1'
+      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.1/racket-minimal-9.3.1-src.tgz'
+      SOURCE_SHA256: '37e123e66026b76942a612b9e34b5f2380b44891633c7152e8933360f44fae94'
+      ZIP_NAME: 'racket9-9.3.1.1-windows-x86_64.zip'
+      EXE_NAME: 'racket9-9.3.1.1-windows-x86_64-setup.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'x64'
@@ -453,8 +453,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REPO: 'CutieDeng/win-racket'
-          RELEASE_TAG: 'v9.2.5'
-          RELEASE_NAME: 'Racket 9.2.5 Windows portable'
+          RELEASE_TAG: 'v9.3.1'
+          RELEASE_NAME: 'Racket 9.3.1 Windows portable'
           CREATE_RELEASE: 'true'
         run: |
           set -euo pipefail
