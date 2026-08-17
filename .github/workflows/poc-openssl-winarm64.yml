@@ -85,9 +85,10 @@ jobs:
           cd "$OSSL_DIR"
           # RCFLAGS default is --target=pe-x86-64 which is wrong for arm64; clear it.
           export RCFLAGS=""
+          # OpenSSL 3.0.2 Configure does not accept no-docs/no-apps; keep it minimal.
           ./Configure ${{ matrix.ossl_target }} \
             --cross-compile-prefix=${{ matrix.cross_prefix }} \
-            shared no-tests no-docs no-apps \
+            shared no-tests \
             RCFLAGS=""
           make -j"$(nproc)" build_libs
           echo "=== produced DLLs ==="
