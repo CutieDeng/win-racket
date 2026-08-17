@@ -25,7 +25,7 @@ env:
   SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.1/racket-minimal-9.3.1-src.tgz'
   SOURCE_SHA256: '82c5ea4c2e406b14b69ff7255ee34358f4abb0c1eee635e256562a0ca816f85d'
   # Fork commit providing the DLL-aware rktcrypto-ffi + win32-store loader.
-  COLLECTS_COMMIT: 'd16138335f78500ea69a4fca8f21ceff67d7541d'
+  COLLECTS_COMMIT: 'd16138335feceb4f54bce78a9c13179f658a8160'
   BUILD_JOBS: '2'
   NMAKE_TARGET: 'plain-install'
 
