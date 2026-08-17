@@ -176,6 +176,7 @@ jobs:
           if (!$racketExe) { throw "Racket.exe not found after build" }
           Write-Host "Using: $($racketExe.FullName)"
           $smoke = @'
+          #lang racket/base
           (require openssl net/url racket/port
                    (only-in openssl/private/rktcrypto-win32-store win32-store-ders))
           (printf "ssl-available? = ~a\n" ssl-available?)
