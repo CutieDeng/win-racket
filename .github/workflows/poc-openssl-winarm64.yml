@@ -86,38 +86,45 @@ jobs:
           # RCFLAGS default is --target=pe-x86-64 which is wrong for arm64; clear it.
           export RCFLAGS=""
           # OpenSSL 3.0.2 Configure does not accept no-docs/no-apps; keep it minimal.
+          # arm64: build no-asm so the runtime feature probe in crypto/armcap.c
+          # (SIGILL machinery via sigaction/sigsetjmp, absent on Windows) collapses
+          # to the trivial __ARM_MAX_ARCH__<7 path; crypto runs pure-C. (x86_64
+          # keeps asm.)
+          EXTRA=""
+          if [ "${{ matrix.arch }}" = "arm64" ]; then EXTRA="no-asm"; fi
           ./Configure ${{ matrix.ossl_target }} \
             --cross-compile-prefix=${{ matrix.cross_prefix }} \
-            shared no-tests \
+            shared no-tests $EXTRA \
             RCFLAGS=""
           make -j"$(nproc)" build_libs
-          echo "=== produced DLLs ==="
-          ls -la libssl-3.dll libcrypto-3.dll
+          echo "=== produced DLLs (mingw adds an arch suffix, e.g. -x64) ==="
+          ls -la libssl-3*.dll libcrypto-3*.dll
 
       - name: Verify DLL architecture
         run: |
           set -euxo pipefail
           cd "$OSSL_DIR"
-          for dll in libcrypto-3.dll libssl-3.dll; do
-            test -f "$dll" || { echo "missing $dll"; exit 1; }
-            info=$("$HOME/llvm-mingw/bin/llvm-readobj" --file-headers "$dll" 2>/dev/null | grep -iE "Machine|Format" || true)
-            echo "$dll: $info"
-          done
+          crypto_dll=$(ls libcrypto-3*.dll | head -1)
+          ssl_dll=$(ls libssl-3*.dll | head -1)
+          test -n "$crypto_dll" -a -f "$crypto_dll" || { echo "no libcrypto DLL produced"; exit 1; }
+          test -n "$ssl_dll" -a -f "$ssl_dll" || { echo "no libssl DLL produced"; exit 1; }
+          echo "DLLs: $crypto_dll $ssl_dll"
+          machine=$("$HOME/llvm-mingw/bin/llvm-readobj" --file-headers "$crypto_dll" | grep -i "Machine" | head -1)
+          echo "$crypto_dll machine: $machine"
           # arm64 PE machine is ARM64 (0xAA64); x86_64 is AMD64 (0x8664)
-          machine=$("$HOME/llvm-mingw/bin/llvm-readobj" --file-headers libcrypto-3.dll | grep -i "Machine" | head -1)
-          echo "libcrypto-3.dll machine: $machine"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            echo "$machine" | grep -iqE "ARM64|AA64" || { echo "libcrypto-3.dll is not ARM64"; exit 1; }
+            echo "$machine" | grep -iqE "ARM64|AA64" || { echo "$crypto_dll is not ARM64"; exit 1; }
           else
-            echo "$machine" | grep -iqE "AMD64|8664|x86-64" || { echo "libcrypto-3.dll is not x86_64"; exit 1; }
+            echo "$machine" | grep -iqE "AMD64|8664|x86-64" || { echo "$crypto_dll is not x86_64"; exit 1; }
           fi
-          echo "PoC OK: OpenSSL 3 built libssl/libcrypto DLLs for Windows ${{ matrix.arch }}."
+          # save resolved names for the upload step
+          mkdir -p "$GITHUB_WORKSPACE/ossl-dlls"
+          cp -p "$crypto_dll" "$ssl_dll" "$GITHUB_WORKSPACE/ossl-dlls/"
+          echo "PoC OK: OpenSSL 3 built libssl/libcrypto DLLs for Windows ${{ matrix.arch }} ($crypto_dll)."
 
       - name: Upload DLLs
         uses: actions/upload-artifact@v6
         with:
           name: 'openssl-win-${{ matrix.arch }}'
-          path: |
-            ${{ env.OSSL_DIR }}/libssl-3.dll
-            ${{ env.OSSL_DIR }}/libcrypto-3.dll
+          path: ossl-dlls/*.dll
           if-no-files-found: error
