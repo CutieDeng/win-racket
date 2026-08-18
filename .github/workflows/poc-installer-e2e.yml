@@ -172,3 +172,4 @@ jobs:
           Write-Host "PoC OK: cached zip verified end to end on ${{ matrix.arch }}." 
 # retrigger: verify bsdtar-packed cached zip
 # retrigger: verify normalized-timestamp cached zip
+# retrigger: verify relocatable cached zip (dep re-encoding)
