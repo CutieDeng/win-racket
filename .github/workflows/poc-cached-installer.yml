@@ -108,19 +108,23 @@ jobs:
           $cfgForRacket = $configPath.Replace('\', '/')
           & $racketExe -e "(void (call-with-input-file `"$cfgForRacket`" read))"
           if ($LASTEXITCODE -ne 0) { throw "rewritten config.rktd is not readable Racket data" }
-          $racoExe = Join-Path $InstallRoot 'raco.exe'
+          # The portable tree ships NO in-tree .zo at all (runs from source),
+          # so the first setup necessarily bootstraps itself from source
+          # ("ignoring compiled files" mode) and its dep bookkeeping does not
+          # self-validate. Run setup twice: the second pass converges the
+          # cache; later passes must then no-op.
           $sw = [Diagnostics.Stopwatch]::StartNew()
-          if (Test-Path -LiteralPath $racoExe) {
-            & $racoExe setup --system --no-user --reset-cache -D --no-pkg-deps
-          } else {
-            & $racketExe -N raco -l- raco setup --system --no-user --reset-cache -D --no-pkg-deps
-          }
+          & $racketExe -N raco -l- raco setup --system --no-user --reset-cache -D --no-pkg-deps
           if ($LASTEXITCODE -ne 0) { throw "cache raco setup failed: $LASTEXITCODE" }
           $sw.Stop()
+          $sw2 = [Diagnostics.Stopwatch]::StartNew()
+          & $racketExe -N raco -l- raco setup --system --no-user -D --no-pkg-deps
+          if ($LASTEXITCODE -ne 0) { throw "cache converge setup failed: $LASTEXITCODE" }
+          $sw2.Stop()
           $count = (Get-ChildItem -LiteralPath $CacheRoot -Recurse -File | Measure-Object).Count
           $bytes = (Get-ChildItem -LiteralPath $CacheRoot -Recurse -File | Measure-Object Length -Sum).Sum
           if ($count -lt 100) { throw "suspiciously small cache: $count files" }
-          Write-Host ("CACHE-BUILD seconds={0:N0} files={1} mb={2:N1}" -f $sw.Elapsed.TotalSeconds, $count, ($bytes/1MB))
+          Write-Host ("CACHE-BUILD seconds={0:N0}+{1:N0} files={2} mb={3:N1}" -f $sw.Elapsed.TotalSeconds, $sw2.Elapsed.TotalSeconds, $count, ($bytes/1MB))
           "CACHE_FILES=$count" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: In-place cache validity (HARD; setup must no-op before repackage)
