@@ -55,8 +55,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          # Git Bash's tar is GNU tar (no zip support); use Windows' bsdtar.
+          TAR=/c/Windows/System32/tar.exe
           mkdir extracted
-          tar -xf portable.zip -C extracted
+          "$TAR" -xf portable.zip -C extracted
           test -d "extracted/racket9"
           dest=$(cygpath -u "$INSTALL_ROOT")
           test ! -e "$dest"
@@ -103,12 +105,13 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          TAR=/c/Windows/System32/tar.exe
           cd "$(cygpath -u 'C:\Program Files')"
-          tar -a -cf "$GITHUB_WORKSPACE/cached-tree.zip" Racket9
-          ls -l "$GITHUB_WORKSPACE/cached-tree.zip" portable.zip 2>/dev/null || ls -l "$GITHUB_WORKSPACE/cached-tree.zip"
+          "$TAR" -a -cf "$GITHUB_WORKSPACE/cached-tree.zip" Racket9
+          ls -l "$GITHUB_WORKSPACE/cached-tree.zip" "$GITHUB_WORKSPACE/portable.zip"
           rm -rf Racket9
           test ! -e Racket9
-          tar -xf "$GITHUB_WORKSPACE/cached-tree.zip"
+          "$TAR" -xf "$GITHUB_WORKSPACE/cached-tree.zip"
           test -f "Racket9/Racket.exe"
           test -f "Racket9/var/cache/racket/compiled/.racket-installer-cache"
 
