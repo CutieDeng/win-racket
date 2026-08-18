@@ -129,3 +129,4 @@ jobs:
           & $racketExe -e '(displayln (version))' | Tee-Object -Variable v
           if ($v -notmatch '9\.3\.4') { throw "unexpected version: $v" }
           Write-Host "PoC OK: both published 9.3.4 installers verified end to end on ${{ matrix.arch }}."
+# retrigger: verify republished 9.3.4 installers (app-constant fix)
