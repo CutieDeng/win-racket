@@ -141,5 +141,7 @@ jobs:
           grep -q '^rktrandom-available? #t$' out.lf.txt
           grep -q '^selftest 1$' out.lf.txt
           grep -q '^rktrandom-smoke-ok$' out.lf.txt
-          diff -u poc/rktrandom-reference.txt out.lf.txt
+          # normalize the reference too: checkout's autocrlf makes it CRLF
+          tr -d '\r' < poc/rktrandom-reference.txt > ref.lf.txt
+          diff -u ref.lf.txt out.lf.txt
           echo "PoC OK: rktrandom on Windows ${{ matrix.arch }} is bit-identical to the macOS reference (same seed, all 6 algorithms, jumps/forks/distributions)."
