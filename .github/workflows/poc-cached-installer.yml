@@ -67,11 +67,18 @@ jobs:
           test ! -e "$dest"
           mv "extracted/racket9" "$dest"
           test -f "$dest/Racket.exe"
-          # overlay the compiled-cache Windows fix (fresh mtime beats the
-          # stale in-tree .zo, so raco setup recompiles it from source)
+          # overlay the compiled-cache Windows fix, then rebuild its in-tree
+          # .zo with the still-pristine config (roots = in-tree), so raco
+          # setup later loads a CONSISTENT zo instead of tripping its
+          # "ignoring compiled files, rebuilding from source" paranoia (a
+          # PoC-only hazard: production bakes the fix into the source
+          # archive and nmake compiles it normally)
           raw="https://raw.githubusercontent.com/CutieDeng/racket/$OVERLAY_COMMIT/racket/collects/setup/compiled-cache.rkt"
           curl -fsSL "$raw" -o "$dest/collects/setup/compiled-cache.rkt"
           grep -q "reroot-path" "$dest/collects/setup/compiled-cache.rkt"
+          "$dest/Racket.exe" -N raco -l- raco make "$(cygpath -w "$dest/collects/setup/compiled-cache.rkt")"
+          find "$dest/collects/setup/compiled" -newer "$dest/collects/setup/compiled-cache.rkt" -name 'compiled-cache*' | grep -q . || {
+            echo "in-tree zo for overlaid compiled-cache.rkt was not refreshed"; exit 1; }
 
       - name: Configure cache root and build system cache (timed)
         shell: pwsh
@@ -114,6 +121,29 @@ jobs:
           Write-Host ("CACHE-BUILD seconds={0:N0} files={1} mb={2:N1}" -f $sw.Elapsed.TotalSeconds, $count, ($bytes/1MB))
           "CACHE_FILES=$count" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: In-place cache validity (HARD; setup must no-op before repackage)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $CacheRoot = $env:CACHE_ROOT
+          $src = Join-Path $env:INSTALL_ROOT 'collects\acks\acks.rkt'
+          $zo = Join-Path $CacheRoot 'c\program files\racket9\collects\acks\compiled\acks_rkt.zo'
+          Write-Host "sample src mtime: $((Get-Item -LiteralPath $src).LastWriteTime.ToString('o'))"
+          Write-Host "sample  zo mtime: $((Get-Item -LiteralPath $zo).LastWriteTime.ToString('o'))"
+          Start-Sleep -Seconds 2
+          $marker = Get-Date
+          $racketExe = Join-Path $env:INSTALL_ROOT 'Racket.exe'
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          & $racketExe -N raco -l- raco setup --system --no-user -D --no-pkg-deps
+          if ($LASTEXITCODE -ne 0) { throw "in-place revalidation setup failed: $LASTEXITCODE" }
+          $sw.Stop()
+          $rebuilt = @(Get-ChildItem -LiteralPath $CacheRoot -Recurse -File | Where-Object { $_.LastWriteTime -gt $marker })
+          Write-Host ("INPLACE-REVALIDATE seconds={0:N0} rebuilt={1}" -f $sw.Elapsed.TotalSeconds, $rebuilt.Count)
+          if ($rebuilt.Count -gt 0) {
+            $rebuilt | Select-Object -First 20 FullName | Format-Table -AutoSize
+            throw "in-place second setup rewrote $($rebuilt.Count) cache files: the freshly built cache does not validate against itself"
+          }
+
       - name: Repackage tree+cache, wipe, re-extract (simulated install copy)
         shell: bash
         run: |
@@ -146,6 +176,10 @@ jobs:
           $CacheRoot = $env:CACHE_ROOT
           $before = (Get-ChildItem -LiteralPath $CacheRoot -Recurse -File | Measure-Object).Count
           if ("$before" -ne $env:CACHE_FILES) { throw "cache file count changed across repackage: $before vs $env:CACHE_FILES" }
+          $src = Join-Path $env:INSTALL_ROOT 'collects\acks\acks.rkt'
+          $zo = Join-Path $CacheRoot 'c\program files\racket9\collects\acks\compiled\acks_rkt.zo'
+          Write-Host "post-extract src mtime: $((Get-Item -LiteralPath $src).LastWriteTime.ToString('o'))"
+          Write-Host "post-extract  zo mtime: $((Get-Item -LiteralPath $zo).LastWriteTime.ToString('o'))"
           Start-Sleep -Seconds 2
           $marker = Get-Date
           $racketExe = Join-Path $env:INSTALL_ROOT 'Racket.exe'
