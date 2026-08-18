@@ -28,6 +28,9 @@ env:
   FORMULA_VERSION: '9.3.3.1'
   INSTALL_ROOT: 'C:\Program Files\Racket9'
   CACHE_ROOT: 'C:\Program Files\Racket9\var\cache\racket\compiled'
+  # Fork commit with the Windows compiled-cache path-mapping fix
+  # (reroot-path); the released 9.3.3 tree predates it, so overlay.
+  OVERLAY_COMMIT: '642731e9e0b1c30c164d43fbb7f5ef0a25456973'
 
 jobs:
   poc-cached:
@@ -64,6 +67,11 @@ jobs:
           test ! -e "$dest"
           mv "extracted/racket9" "$dest"
           test -f "$dest/Racket.exe"
+          # overlay the compiled-cache Windows fix (fresh mtime beats the
+          # stale in-tree .zo, so raco setup recompiles it from source)
+          raw="https://raw.githubusercontent.com/CutieDeng/racket/$OVERLAY_COMMIT/racket/collects/setup/compiled-cache.rkt"
+          curl -fsSL "$raw" -o "$dest/collects/setup/compiled-cache.rkt"
+          grep -q "reroot-path" "$dest/collects/setup/compiled-cache.rkt"
 
       - name: Configure cache root and build system cache (timed)
         shell: pwsh
