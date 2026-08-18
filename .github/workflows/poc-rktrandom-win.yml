@@ -30,7 +30,7 @@ env:
   SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.2/racket-minimal-9.3.2-src.tgz'
   SOURCE_SHA256: '2499b909816914168e0c61d22da7274dbc503ef3dcff32d9811c24b3a7d1d360'
   # Fork commit flipping the rktrandom Windows gate (cs/c/build.zuo + boot.c).
-  OVERLAY_COMMIT: 'e363628197c7cccd251e06f923e1a456dc6590ef'
+  OVERLAY_COMMIT: '4d339221c0115c402fbfd2386df139e04fb164ac'
   BUILD_JOBS: '2'
   NMAKE_TARGET: 'plain-install'
 
