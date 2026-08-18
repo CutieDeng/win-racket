@@ -162,5 +162,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "revalidation failed" }
           $rebuilt = @(Get-ChildItem -LiteralPath $root -Recurse -Include *.zo,*.dep | Where-Object { $_.LastWriteTime -gt $marker })
           Write-Host ("ZIP-REVALIDATE rebuilt={0}" -f $rebuilt.Count)
-          if ($rebuilt.Count -gt 0) { throw "cached zip did not validate at install path: $($rebuilt.Count) rewrites" }
+          if ($rebuilt.Count -gt 0) {
+            $rebuilt | Select-Object -First 30 -ExpandProperty FullName | ForEach-Object { Write-Host "REBUILT: $_" }
+            throw "cached zip did not validate at install path: $($rebuilt.Count) rewrites"
+          }
           Write-Host "PoC OK: cached zip verified end to end on ${{ matrix.arch }}." 
