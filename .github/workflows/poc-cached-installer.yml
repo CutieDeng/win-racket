@@ -76,7 +76,9 @@ jobs:
           raw="https://raw.githubusercontent.com/CutieDeng/racket/$OVERLAY_COMMIT/racket/collects/setup/compiled-cache.rkt"
           curl -fsSL "$raw" -o "$dest/collects/setup/compiled-cache.rkt"
           grep -q "reroot-path" "$dest/collects/setup/compiled-cache.rkt"
-          "$dest/Racket.exe" -N raco -l- raco make "$(cygpath -w "$dest/collects/setup/compiled-cache.rkt")"
+          # minimal racket has no `raco make`; drive compiler/cm directly
+          wp=$(echo "$INSTALL_ROOT" | sed 's|\\|/|g')
+          "$dest/Racket.exe" -e "(require compiler/cm) (managed-compile-zo \"$wp/collects/setup/compiled-cache.rkt\")"
           find "$dest/collects/setup/compiled" -newer "$dest/collects/setup/compiled-cache.rkt" -name 'compiled-cache*' | grep -q . || {
             echo "in-tree zo for overlaid compiled-cache.rkt was not refreshed"; exit 1; }
 
