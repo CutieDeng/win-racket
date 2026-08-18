@@ -167,3 +167,4 @@ jobs:
             throw "cached zip did not validate at install path: $($rebuilt.Count) rewrites"
           }
           Write-Host "PoC OK: cached zip verified end to end on ${{ matrix.arch }}." 
+# retrigger: verify bsdtar-packed cached zip
