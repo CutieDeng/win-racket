@@ -82,10 +82,15 @@ jobs:
           $configText = $configText.Replace('"../../share/racket/self-catalog"', '"../share/self-catalog"')
           $cacheForConfig = $CacheRoot.Replace('\', '/').Replace('"', '\"')
           $entries = ' (default-scope . "installation") (compiled-file-cache-roots . (user system)) (compiled-file-system-cache-root . "' + $cacheForConfig + '")'
-          $configText = [regex]::Replace($configText, '\s*\)\)\s*$', $entries + "))`r`n")
+          # the final "))" is <last-entry-close><hash-close>: re-close the last
+          # entry BEFORE splicing the new entries, then close the hash
+          $configText = [regex]::Replace($configText, '\s*\)\)\s*$', ')' + $entries + ")`r`n")
           if ($configText -notmatch '\(compiled-file-system-cache-root \.') { throw 'config rewrite failed' }
           Set-Content -LiteralPath $configPath -Value $configText -Encoding UTF8
           $racketExe = Join-Path $InstallRoot 'Racket.exe'
+          $cfgForRacket = $configPath.Replace('\', '/')
+          & $racketExe -e "(void (call-with-input-file `"$cfgForRacket`" read))"
+          if ($LASTEXITCODE -ne 0) { throw "rewritten config.rktd is not readable Racket data" }
           $racoExe = Join-Path $InstallRoot 'raco.exe'
           $sw = [Diagnostics.Stopwatch]::StartNew()
           if (Test-Path -LiteralPath $racoExe) {
