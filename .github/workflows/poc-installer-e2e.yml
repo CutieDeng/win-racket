@@ -158,8 +158,11 @@ jobs:
           if (($s -join "`n") -notmatch 'zip-e2e-ok') { throw 'smoke marker missing' }
           Start-Sleep -Seconds 2
           $marker = Get-Date
-          & $racketExe -N raco -l- raco setup --no-user -D --no-pkg-deps --no-launcher
+          # -j 1 -r: serial with the compile-manager trace, so the log states
+          # exactly why any module is considered stale
+          & $racketExe -N raco -l- raco setup -j 1 -r --no-user -D --no-pkg-deps --no-launcher 2>&1 | Tee-Object -FilePath setup-trace.txt | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "revalidation failed" }
+          Select-String -Path setup-trace.txt -Pattern 'errortrace|expeditor|sandbox-coverage' | Select-Object -First 40 -ExpandProperty Line | ForEach-Object { Write-Host "TRACE: $_" }
           $rebuilt = @(Get-ChildItem -LiteralPath $root -Recurse -Include *.zo,*.dep | Where-Object { $_.LastWriteTime -gt $marker })
           Write-Host ("ZIP-REVALIDATE rebuilt={0}" -f $rebuilt.Count)
           if ($rebuilt.Count -gt 0) {
