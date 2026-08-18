@@ -21,12 +21,13 @@ jobs:
       contents: read
     env:
       PACKAGE_NAME: 'racket9'
-      SOURCE_VERSION: '9.3.3'
-      FORMULA_VERSION: '9.3.3.1'
-      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.3/racket-minimal-9.3.3-src.tgz'
-      SOURCE_SHA256: '9ba125c0a0691eb347e427f7e4a3728a831be88639f713681c002c734f5c00c6'
-      ZIP_NAME: 'racket9-9.3.3.1-windows-x86_64.zip'
-      EXE_NAME: 'racket9-9.3.3.1-windows-x86_64-setup.exe'
+      SOURCE_VERSION: '9.3.4'
+      FORMULA_VERSION: '9.3.4.1'
+      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.4/racket-minimal-9.3.4-src.tgz'
+      SOURCE_SHA256: '00a2ea2044c6f28322ce94a8e1952c70828cdc1791ac345cbc6c5df3f6480fd4'
+      ZIP_NAME: 'racket9-9.3.4.1-windows-x86_64.zip'
+      EXE_NAME: 'racket9-9.3.4.1-windows-x86_64-setup.exe'
+      CACHED_EXE_NAME: 'racket9-9.3.4.1-windows-x86_64-setup-cached.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'x64'
@@ -327,7 +328,9 @@ jobs:
           $configText = $configText.Replace('"../../share/racket/self-catalog"', '"../share/self-catalog"')
           $cacheForConfig = $CacheRoot.Replace('\', '/').Replace('"', '\"')
           $entries = ' (default-scope . "installation") (compiled-file-cache-roots . (user system)) (compiled-file-system-cache-root . "' + $cacheForConfig + '")'
-          $configText = [regex]::Replace($configText, '\s*\)\)\s*$', $entries + "))`r`n")
+          # The final "))" is <last-entry-close><hash-close>: re-close the
+          # last entry BEFORE splicing the new entries, then close the hash.
+          $configText = [regex]::Replace($configText, '\s*\)\)\s*$', ')' + $entries + ")`r`n")
           if ($configText -notmatch '\(compiled-file-system-cache-root \.' ) {
             throw 'Unable to configure Racket system cache root'
           }
@@ -335,6 +338,13 @@ jobs:
 
           $racoExe = Join-Path $InstallRoot 'raco.exe'
           $racketExe = Join-Path $InstallRoot 'Racket.exe'
+          if (Test-Path -LiteralPath $racketExe) {
+            $cfgForRacket = $configPath.Replace('\', '/')
+            & $racketExe -e "(void (call-with-input-file `"$cfgForRacket`" read))"
+            if ($LASTEXITCODE -ne 0) {
+              throw "rewritten config.rktd is not readable Racket data: $configPath"
+            }
+          }
           if (Test-Path -LiteralPath $racoExe) {
             & $racoExe setup --system --no-user --reset-cache -D --no-pkg-deps
           } elseif (Test-Path -LiteralPath $racketExe) {
@@ -465,6 +475,173 @@ jobs:
           }
           Get-FileHash $installerPath -Algorithm SHA256
 
+      - name: Build cached installer (prebuilt system cache)
+        shell: pwsh
+        run: |
+          $portableRoot = Join-Path "portable" $env:PORTABLE_DIR
+          # The runtime-keyed system compiled cache is keyed by absolute
+          # source path (setup/compiled-cache.rkt), so the shipped cache is
+          # valid only for the default install location. Stage the payload
+          # there, run the SAME configure script the plain installer runs on
+          # the user's machine, and package the result.
+          $installRoot = 'C:\Program Files\Racket9'
+          if (Test-Path -LiteralPath $installRoot) {
+            throw "unexpected existing install root: $installRoot"
+          }
+          Copy-Item -LiteralPath $portableRoot -Destination $installRoot -Recurse
+          $cacheRoot = Join-Path $installRoot 'var\cache\racket\compiled'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installRoot 'installer-configure.ps1') -InstallRoot $installRoot -CacheRoot $cacheRoot
+          if ($LASTEXITCODE -ne 0) {
+            throw "CI system-cache raco setup failed with exit $LASTEXITCODE"
+          }
+          # The portable tree ships no in-tree .zo, so the first setup
+          # bootstraps from source and its cache does not self-validate; a
+          # second pass converges the deps so installed caches no-op under
+          # any later raco setup.
+          $racketExe = Join-Path $installRoot 'Racket.exe'
+          & $racketExe -N raco -l- raco setup --system --no-user -D --no-pkg-deps
+          if ($LASTEXITCODE -ne 0) {
+            throw "CI system-cache converge setup failed with exit $LASTEXITCODE"
+          }
+          $count = (Get-ChildItem -LiteralPath $cacheRoot -Recurse -File | Measure-Object).Count
+          if ($count -lt 100) {
+            throw "suspiciously small system cache: $count files"
+          }
+          Write-Host "cached payload: $count system-cache files"
+          New-Item -ItemType Directory -Force "portable-cached" | Out-Null
+          $cachedRoot = Join-Path "portable-cached" $env:PORTABLE_DIR
+          Copy-Item -LiteralPath $installRoot -Destination $cachedRoot -Recurse
+          Remove-Item -Recurse -Force -LiteralPath $installRoot
+          $outputBase = [IO.Path]::GetFileNameWithoutExtension($env:CACHED_EXE_NAME)
+          @"
+          [Setup]
+          AppId=racket9
+          AppName=Racket
+          AppVersion=$env:FORMULA_VERSION
+          DefaultDirName={autopf}\Racket9
+          DefaultGroupName=Racket 9
+          DisableProgramGroupPage=yes
+          OutputDir=artifacts
+          OutputBaseFilename=$outputBase
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=admin
+          WizardStyle=modern
+
+          [Files]
+          Source: "portable-cached\$env:PORTABLE_DIR\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{group}\Racket"; Filename: "{app}\Racket.exe"
+          Name: "{group}\Uninstall Racket"; Filename: "{uninstallexe}"
+
+          [Code]
+          var
+            CachePage: TInputDirWizardPage;
+            CacheDefaultRoot: String;
+
+          function DefaultCacheRoot(): String;
+          begin
+            Result := ExpandConstant('{app}\var\cache\racket\compiled');
+          end;
+
+          function GetCacheRoot(Param: String): String;
+          var
+            Value: String;
+          begin
+            Value := ExpandConstant('{param:CACHEPATH|}');
+            if Value <> '' then
+              Result := Value
+            else if Assigned(CachePage) then
+              Result := CachePage.Values[0]
+            else
+              Result := DefaultCacheRoot();
+          end;
+
+          procedure InitializeWizard;
+          begin
+            CachePage := CreateInputDirPage(wpSelectDir, 'Racket Cache Directory',
+              'Choose the compiled cache directory.',
+              'This installer ships a prebuilt cache for the default install directory; keeping the defaults skips the cache build. A custom directory rebuilds the cache during installation. For unattended installs, pass /CACHEPATH=...',
+              False, '');
+            CachePage.Add('');
+            CacheDefaultRoot := DefaultCacheRoot();
+            CachePage.Values[0] := CacheDefaultRoot;
+          end;
+
+          procedure CurPageChanged(CurPageID: Integer);
+          begin
+            if Assigned(CachePage) and (CurPageID = CachePage.ID) then
+              if (CachePage.Values[0] = '') or (CachePage.Values[0] = CacheDefaultRoot) then begin
+                CacheDefaultRoot := DefaultCacheRoot();
+                CachePage.Values[0] := CacheDefaultRoot;
+              end;
+          end;
+
+          function NextButtonClick(CurPageID: Integer): Boolean;
+          begin
+            Result := True;
+            if Assigned(CachePage) and (CurPageID = CachePage.ID) and (Trim(CachePage.Values[0]) = '') then begin
+              MsgBox('Cache path is required.', mbError, MB_OK);
+              Result := False;
+            end;
+          end;
+
+          procedure CurStepChanged(CurStep: TSetupStep);
+          var
+            ResultCode: Integer;
+            Params: String;
+            CacheRoot: String;
+          begin
+            if CurStep = ssPostInstall then begin
+              CacheRoot := GetCacheRoot('');
+              if not RegWriteStringValue(HKLM, 'Software\Racket9', 'CacheRoot', CacheRoot) then
+                RaiseException('Failed to save Racket cache path.');
+              if (ExpandConstant('{app}') = ExpandConstant('{autopf}\Racket9'))
+                 and (CacheRoot = DefaultCacheRoot())
+                 and FileExists(ExpandConstant('{app}\var\cache\racket\compiled\.racket-installer-cache')) then begin
+                Log('Prebuilt system cache matches this install path; skipping raco setup.');
+                exit;
+              end;
+              // The shipped cache is keyed to the default path; drop it and
+              // rebuild against the chosen locations.
+              if DirExists(ExpandConstant('{app}\var\cache\racket\compiled')) then
+                DelTree(ExpandConstant('{app}\var\cache\racket\compiled'), True, True, True);
+              Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer-configure.ps1') +
+                '" -InstallRoot "' + ExpandConstant('{app}') + '" -CacheRoot "' + CacheRoot + '"';
+              if not Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+                RaiseException('Failed to run Racket cache setup.');
+              if ResultCode <> 0 then
+                RaiseException('Racket cache setup failed with exit code ' + IntToStr(ResultCode) + '.');
+            end;
+          end;
+
+          procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+          var
+            CacheRoot: String;
+          begin
+            if CurUninstallStep = usUninstall then begin
+              if RegQueryStringValue(HKLM, 'Software\Racket9', 'CacheRoot', CacheRoot) then begin
+                if FileExists(AddBackslash(CacheRoot) + '.racket-installer-cache') then
+                  DelTree(CacheRoot, True, True, True);
+              end;
+              RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Racket9');
+            end;
+          end;
+          "@ | Set-Content -Path racket-installer-cached.iss -Encoding UTF8
+
+          & $env:ISCC_EXE racket-installer-cached.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup (cached) failed with exit $LASTEXITCODE"
+          }
+          $cachedInstallerPath = Join-Path "artifacts" $env:CACHED_EXE_NAME
+          if (!(Test-Path $cachedInstallerPath) -or (Get-Item $cachedInstallerPath).Length -le 0) {
+            throw "cached installer exe missing or empty: $cachedInstallerPath"
+          }
+          Get-FileHash $cachedInstallerPath -Algorithm SHA256
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -481,12 +658,13 @@ jobs:
       contents: read
     env:
       PACKAGE_NAME: 'racket9'
-      SOURCE_VERSION: '9.3.3'
-      FORMULA_VERSION: '9.3.3.1'
-      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.3/racket-minimal-9.3.3-src.tgz'
-      SOURCE_SHA256: '9ba125c0a0691eb347e427f7e4a3728a831be88639f713681c002c734f5c00c6'
-      ZIP_NAME: 'racket9-9.3.3.1-windows-arm64.zip'
-      EXE_NAME: 'racket9-9.3.3.1-windows-arm64-setup.exe'
+      SOURCE_VERSION: '9.3.4'
+      FORMULA_VERSION: '9.3.4.1'
+      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.4/racket-minimal-9.3.4-src.tgz'
+      SOURCE_SHA256: '00a2ea2044c6f28322ce94a8e1952c70828cdc1791ac345cbc6c5df3f6480fd4'
+      ZIP_NAME: 'racket9-9.3.4.1-windows-arm64.zip'
+      EXE_NAME: 'racket9-9.3.4.1-windows-arm64-setup.exe'
+      CACHED_EXE_NAME: 'racket9-9.3.4.1-windows-arm64-setup-cached.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'arm64'
@@ -787,7 +965,9 @@ jobs:
           $configText = $configText.Replace('"../../share/racket/self-catalog"', '"../share/self-catalog"')
           $cacheForConfig = $CacheRoot.Replace('\', '/').Replace('"', '\"')
           $entries = ' (default-scope . "installation") (compiled-file-cache-roots . (user system)) (compiled-file-system-cache-root . "' + $cacheForConfig + '")'
-          $configText = [regex]::Replace($configText, '\s*\)\)\s*$', $entries + "))`r`n")
+          # The final "))" is <last-entry-close><hash-close>: re-close the
+          # last entry BEFORE splicing the new entries, then close the hash.
+          $configText = [regex]::Replace($configText, '\s*\)\)\s*$', ')' + $entries + ")`r`n")
           if ($configText -notmatch '\(compiled-file-system-cache-root \.' ) {
             throw 'Unable to configure Racket system cache root'
           }
@@ -795,6 +975,13 @@ jobs:
 
           $racoExe = Join-Path $InstallRoot 'raco.exe'
           $racketExe = Join-Path $InstallRoot 'Racket.exe'
+          if (Test-Path -LiteralPath $racketExe) {
+            $cfgForRacket = $configPath.Replace('\', '/')
+            & $racketExe -e "(void (call-with-input-file `"$cfgForRacket`" read))"
+            if ($LASTEXITCODE -ne 0) {
+              throw "rewritten config.rktd is not readable Racket data: $configPath"
+            }
+          }
           if (Test-Path -LiteralPath $racoExe) {
             & $racoExe setup --system --no-user --reset-cache -D --no-pkg-deps
           } elseif (Test-Path -LiteralPath $racketExe) {
@@ -925,6 +1112,173 @@ jobs:
           }
           Get-FileHash $installerPath -Algorithm SHA256
 
+      - name: Build cached installer (prebuilt system cache)
+        shell: pwsh
+        run: |
+          $portableRoot = Join-Path "portable" $env:PORTABLE_DIR
+          # The runtime-keyed system compiled cache is keyed by absolute
+          # source path (setup/compiled-cache.rkt), so the shipped cache is
+          # valid only for the default install location. Stage the payload
+          # there, run the SAME configure script the plain installer runs on
+          # the user's machine, and package the result.
+          $installRoot = 'C:\Program Files\Racket9'
+          if (Test-Path -LiteralPath $installRoot) {
+            throw "unexpected existing install root: $installRoot"
+          }
+          Copy-Item -LiteralPath $portableRoot -Destination $installRoot -Recurse
+          $cacheRoot = Join-Path $installRoot 'var\cache\racket\compiled'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installRoot 'installer-configure.ps1') -InstallRoot $installRoot -CacheRoot $cacheRoot
+          if ($LASTEXITCODE -ne 0) {
+            throw "CI system-cache raco setup failed with exit $LASTEXITCODE"
+          }
+          # The portable tree ships no in-tree .zo, so the first setup
+          # bootstraps from source and its cache does not self-validate; a
+          # second pass converges the deps so installed caches no-op under
+          # any later raco setup.
+          $racketExe = Join-Path $installRoot 'Racket.exe'
+          & $racketExe -N raco -l- raco setup --system --no-user -D --no-pkg-deps
+          if ($LASTEXITCODE -ne 0) {
+            throw "CI system-cache converge setup failed with exit $LASTEXITCODE"
+          }
+          $count = (Get-ChildItem -LiteralPath $cacheRoot -Recurse -File | Measure-Object).Count
+          if ($count -lt 100) {
+            throw "suspiciously small system cache: $count files"
+          }
+          Write-Host "cached payload: $count system-cache files"
+          New-Item -ItemType Directory -Force "portable-cached" | Out-Null
+          $cachedRoot = Join-Path "portable-cached" $env:PORTABLE_DIR
+          Copy-Item -LiteralPath $installRoot -Destination $cachedRoot -Recurse
+          Remove-Item -Recurse -Force -LiteralPath $installRoot
+          $outputBase = [IO.Path]::GetFileNameWithoutExtension($env:CACHED_EXE_NAME)
+          @"
+          [Setup]
+          AppId=racket9
+          AppName=Racket
+          AppVersion=$env:FORMULA_VERSION
+          DefaultDirName={autopf}\Racket9
+          DefaultGroupName=Racket 9
+          DisableProgramGroupPage=yes
+          OutputDir=artifacts
+          OutputBaseFilename=$outputBase
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesAllowed=arm64
+          ArchitecturesInstallIn64BitMode=arm64
+          PrivilegesRequired=admin
+          WizardStyle=modern
+
+          [Files]
+          Source: "portable-cached\$env:PORTABLE_DIR\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{group}\Racket"; Filename: "{app}\Racket.exe"
+          Name: "{group}\Uninstall Racket"; Filename: "{uninstallexe}"
+
+          [Code]
+          var
+            CachePage: TInputDirWizardPage;
+            CacheDefaultRoot: String;
+
+          function DefaultCacheRoot(): String;
+          begin
+            Result := ExpandConstant('{app}\var\cache\racket\compiled');
+          end;
+
+          function GetCacheRoot(Param: String): String;
+          var
+            Value: String;
+          begin
+            Value := ExpandConstant('{param:CACHEPATH|}');
+            if Value <> '' then
+              Result := Value
+            else if Assigned(CachePage) then
+              Result := CachePage.Values[0]
+            else
+              Result := DefaultCacheRoot();
+          end;
+
+          procedure InitializeWizard;
+          begin
+            CachePage := CreateInputDirPage(wpSelectDir, 'Racket Cache Directory',
+              'Choose the compiled cache directory.',
+              'This installer ships a prebuilt cache for the default install directory; keeping the defaults skips the cache build. A custom directory rebuilds the cache during installation. For unattended installs, pass /CACHEPATH=...',
+              False, '');
+            CachePage.Add('');
+            CacheDefaultRoot := DefaultCacheRoot();
+            CachePage.Values[0] := CacheDefaultRoot;
+          end;
+
+          procedure CurPageChanged(CurPageID: Integer);
+          begin
+            if Assigned(CachePage) and (CurPageID = CachePage.ID) then
+              if (CachePage.Values[0] = '') or (CachePage.Values[0] = CacheDefaultRoot) then begin
+                CacheDefaultRoot := DefaultCacheRoot();
+                CachePage.Values[0] := CacheDefaultRoot;
+              end;
+          end;
+
+          function NextButtonClick(CurPageID: Integer): Boolean;
+          begin
+            Result := True;
+            if Assigned(CachePage) and (CurPageID = CachePage.ID) and (Trim(CachePage.Values[0]) = '') then begin
+              MsgBox('Cache path is required.', mbError, MB_OK);
+              Result := False;
+            end;
+          end;
+
+          procedure CurStepChanged(CurStep: TSetupStep);
+          var
+            ResultCode: Integer;
+            Params: String;
+            CacheRoot: String;
+          begin
+            if CurStep = ssPostInstall then begin
+              CacheRoot := GetCacheRoot('');
+              if not RegWriteStringValue(HKLM, 'Software\Racket9', 'CacheRoot', CacheRoot) then
+                RaiseException('Failed to save Racket cache path.');
+              if (ExpandConstant('{app}') = ExpandConstant('{autopf}\Racket9'))
+                 and (CacheRoot = DefaultCacheRoot())
+                 and FileExists(ExpandConstant('{app}\var\cache\racket\compiled\.racket-installer-cache')) then begin
+                Log('Prebuilt system cache matches this install path; skipping raco setup.');
+                exit;
+              end;
+              // The shipped cache is keyed to the default path; drop it and
+              // rebuild against the chosen locations.
+              if DirExists(ExpandConstant('{app}\var\cache\racket\compiled')) then
+                DelTree(ExpandConstant('{app}\var\cache\racket\compiled'), True, True, True);
+              Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer-configure.ps1') +
+                '" -InstallRoot "' + ExpandConstant('{app}') + '" -CacheRoot "' + CacheRoot + '"';
+              if not Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+                RaiseException('Failed to run Racket cache setup.');
+              if ResultCode <> 0 then
+                RaiseException('Racket cache setup failed with exit code ' + IntToStr(ResultCode) + '.');
+            end;
+          end;
+
+          procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+          var
+            CacheRoot: String;
+          begin
+            if CurUninstallStep = usUninstall then begin
+              if RegQueryStringValue(HKLM, 'Software\Racket9', 'CacheRoot', CacheRoot) then begin
+                if FileExists(AddBackslash(CacheRoot) + '.racket-installer-cache') then
+                  DelTree(CacheRoot, True, True, True);
+              end;
+              RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Racket9');
+            end;
+          end;
+          "@ | Set-Content -Path racket-installer-cached.iss -Encoding UTF8
+
+          & $env:ISCC_EXE racket-installer-cached.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup (cached) failed with exit $LASTEXITCODE"
+          }
+          $cachedInstallerPath = Join-Path "artifacts" $env:CACHED_EXE_NAME
+          if (!(Test-Path $cachedInstallerPath) -or (Get-Item $cachedInstallerPath).Length -le 0) {
+            throw "cached installer exe missing or empty: $cachedInstallerPath"
+          }
+          Get-FileHash $cachedInstallerPath -Algorithm SHA256
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -954,10 +1308,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REPO: 'CutieDeng/win-racket'
-          RELEASE_TAG: 'v9.3.3'
-          RELEASE_NAME: 'Racket 9.3.3 Windows portable'
+          RELEASE_TAG: 'v9.3.4'
+          RELEASE_NAME: 'Racket 9.3.4 Windows portable'
           CREATE_RELEASE: 'true'
           EXPECTED_ASSETS: '2'
+          EXPECTED_EXES: '4'
         run: |
           set -euo pipefail
           command -v gh >/dev/null 2>&1 || { echo 'gh CLI is required on the publish runner'; exit 1; }
@@ -968,8 +1323,8 @@ jobs:
             printf '  %s\n' "${zip_files[@]}"
             exit 1
           fi
-          if [ "${#exe_files[@]}" -ne "$EXPECTED_ASSETS" ]; then
-            printf 'Expected %s Windows installer exes, got %s\n' "$EXPECTED_ASSETS" "${#exe_files[@]}"
+          if [ "${#exe_files[@]}" -ne "$EXPECTED_EXES" ]; then
+            printf 'Expected %s Windows installer exes, got %s\n' "$EXPECTED_EXES" "${#exe_files[@]}"
             printf '  %s\n' "${exe_files[@]}"
             exit 1
           fi

@@ -12,12 +12,17 @@ and regenerate this repository instead.
 ## Build
 
 The generated workflow builds Racket on `windows-2022, windows-11-arm` for `x86_64, arm64` and uploads
-`racket9-9.3.3.1-windows-x86_64.zip`, `racket9-9.3.3.1-windows-arm64.zip` and `racket9-9.3.3.1-windows-x86_64-setup.exe`, `racket9-9.3.3.1-windows-arm64-setup.exe` as GitHub Actions artifacts. It runs `nmake all` before the
-configured `nmake` target so a clean CI checkout never tries to install missing
-build outputs. The portable archive and Inno Setup installer copy only the
-installed runtime tree, not the source/build tree. The installer accepts
-`/DIR=...` for the install path and `/CACHEPATH=...` for the Racket cache path;
-the default cache path is inside the install directory. Release asset publishing is enabled. The workflow uploads `racket9-9.3.3.1-windows-x86_64.zip`, `racket9-9.3.3.1-windows-arm64.zip` and `racket9-9.3.3.1-windows-x86_64-setup.exe`, `racket9-9.3.3.1-windows-arm64-setup.exe` to `CutieDeng/win-racket` release `v9.3.3` using the `GITHUB_TOKEN` repository secret.
+`racket9-9.3.4.1-windows-x86_64.zip`, `racket9-9.3.4.1-windows-arm64.zip`, `racket9-9.3.4.1-windows-x86_64-setup.exe`, `racket9-9.3.4.1-windows-arm64-setup.exe`, and `racket9-9.3.4.1-windows-x86_64-setup-cached.exe`, `racket9-9.3.4.1-windows-arm64-setup-cached.exe` as GitHub Actions artifacts. It runs
+`nmake all` before the configured `nmake` target so a clean CI checkout never tries
+to install missing build outputs. The portable archive and Inno Setup installers
+copy only the installed runtime tree, not the source/build tree. Both installers
+accept `/DIR=...` for the install path and `/CACHEPATH=...` for the Racket cache
+path; the default cache path is inside the install directory. The `-setup-cached`
+installer additionally embeds the system compiled cache prebuilt for the default
+install directory, so installs that keep the defaults skip the install-time
+`raco setup` entirely (recommended for slower machines); the cache is keyed by
+absolute path, so custom `/DIR=`/`/CACHEPATH=` installs fall back to rebuilding
+the cache exactly like the plain installer. Release asset publishing is enabled. The workflow uploads `racket9-9.3.4.1-windows-x86_64.zip`, `racket9-9.3.4.1-windows-arm64.zip`, `racket9-9.3.4.1-windows-x86_64-setup.exe`, `racket9-9.3.4.1-windows-arm64-setup.exe`, and `racket9-9.3.4.1-windows-x86_64-setup-cached.exe`, `racket9-9.3.4.1-windows-arm64-setup-cached.exe` to `CutieDeng/win-racket` release `v9.3.4` using the `GITHUB_TOKEN` repository secret.
 
 ## Regenerate
 
