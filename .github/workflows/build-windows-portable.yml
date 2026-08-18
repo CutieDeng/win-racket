@@ -21,13 +21,14 @@ jobs:
       contents: read
     env:
       PACKAGE_NAME: 'racket9'
-      SOURCE_VERSION: '9.3.4'
-      FORMULA_VERSION: '9.3.4.1'
-      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.4/racket-minimal-9.3.4-src.tgz'
-      SOURCE_SHA256: '00a2ea2044c6f28322ce94a8e1952c70828cdc1791ac345cbc6c5df3f6480fd4'
-      ZIP_NAME: 'racket9-9.3.4.1-windows-x86_64.zip'
-      EXE_NAME: 'racket9-9.3.4.1-windows-x86_64-setup.exe'
-      CACHED_EXE_NAME: 'racket9-9.3.4.1-windows-x86_64-setup-cached.exe'
+      SOURCE_VERSION: '9.3.5'
+      FORMULA_VERSION: '9.3.5.1'
+      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.5/racket-minimal-9.3.5-src.tgz'
+      SOURCE_SHA256: 'dac88d1a7f1c104de93b31f385bdebe21c43cfbd9f3ca03c0d68050fae6e6663'
+      ZIP_NAME: 'racket9-9.3.5.1-windows-x86_64.zip'
+      CACHED_ZIP_NAME: 'racket9-9.3.5.1-windows-x86_64-cached.zip'
+      EXE_NAME: 'racket9-9.3.5.1-windows-x86_64-setup.exe'
+      CACHED_EXE_NAME: 'racket9-9.3.5.1-windows-x86_64-setup-cached.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'x64'
@@ -279,6 +280,40 @@ jobs:
             throw "portable zip is empty: $artifactPath"
           }
           Get-FileHash $artifactPath -Algorithm SHA256
+
+      - name: Build cached portable zip (in-tree compiled)
+        shell: pwsh
+        run: |
+          # A portable zip must work at ANY extraction path, so unlike the
+          # cached installer's path-keyed system cache this variant uses the
+          # classic in-tree compiled/ model: zo next to sources, config left
+          # pristine, location-independent. Two setup passes: the first
+          # bootstraps from source on the zo-less tree and does not
+          # self-validate; the second converges the deps.
+          $portableRoot = Join-Path "portable" $env:PORTABLE_DIR
+          New-Item -ItemType Directory -Force "portable-zipcached" | Out-Null
+          $zipRoot = Join-Path "portable-zipcached" $env:PORTABLE_DIR
+          Copy-Item -LiteralPath $portableRoot -Destination $zipRoot -Recurse
+          $racketExe = Join-Path $zipRoot 'Racket.exe'
+          & $racketExe -N raco -l- raco setup --no-user -D --no-pkg-deps --no-launcher
+          if ($LASTEXITCODE -ne 0) {
+            throw "in-tree setup pass 1 failed with exit $LASTEXITCODE"
+          }
+          & $racketExe -N raco -l- raco setup --no-user -D --no-pkg-deps --no-launcher
+          if ($LASTEXITCODE -ne 0) {
+            throw "in-tree setup pass 2 failed with exit $LASTEXITCODE"
+          }
+          $zos = (Get-ChildItem -LiteralPath $zipRoot -Recurse -Filter *.zo | Measure-Object).Count
+          if ($zos -lt 500) {
+            throw "suspiciously few in-tree zos: $zos"
+          }
+          Write-Host "cached zip payload: $zos in-tree zos"
+          $cachedZipPath = Join-Path "artifacts" $env:CACHED_ZIP_NAME
+          Compress-Archive -Path $zipRoot -DestinationPath $cachedZipPath -Force
+          if ((Get-Item $cachedZipPath).Length -le 0) {
+            throw "cached portable zip is empty: $cachedZipPath"
+          }
+          Get-FileHash $cachedZipPath -Algorithm SHA256
 
       - name: Build Inno Setup installer
         shell: pwsh
@@ -667,13 +702,14 @@ jobs:
       contents: read
     env:
       PACKAGE_NAME: 'racket9'
-      SOURCE_VERSION: '9.3.4'
-      FORMULA_VERSION: '9.3.4.1'
-      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.4/racket-minimal-9.3.4-src.tgz'
-      SOURCE_SHA256: '00a2ea2044c6f28322ce94a8e1952c70828cdc1791ac345cbc6c5df3f6480fd4'
-      ZIP_NAME: 'racket9-9.3.4.1-windows-arm64.zip'
-      EXE_NAME: 'racket9-9.3.4.1-windows-arm64-setup.exe'
-      CACHED_EXE_NAME: 'racket9-9.3.4.1-windows-arm64-setup-cached.exe'
+      SOURCE_VERSION: '9.3.5'
+      FORMULA_VERSION: '9.3.5.1'
+      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.5/racket-minimal-9.3.5-src.tgz'
+      SOURCE_SHA256: 'dac88d1a7f1c104de93b31f385bdebe21c43cfbd9f3ca03c0d68050fae6e6663'
+      ZIP_NAME: 'racket9-9.3.5.1-windows-arm64.zip'
+      CACHED_ZIP_NAME: 'racket9-9.3.5.1-windows-arm64-cached.zip'
+      EXE_NAME: 'racket9-9.3.5.1-windows-arm64-setup.exe'
+      CACHED_EXE_NAME: 'racket9-9.3.5.1-windows-arm64-setup-cached.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'arm64'
@@ -925,6 +961,40 @@ jobs:
             throw "portable zip is empty: $artifactPath"
           }
           Get-FileHash $artifactPath -Algorithm SHA256
+
+      - name: Build cached portable zip (in-tree compiled)
+        shell: pwsh
+        run: |
+          # A portable zip must work at ANY extraction path, so unlike the
+          # cached installer's path-keyed system cache this variant uses the
+          # classic in-tree compiled/ model: zo next to sources, config left
+          # pristine, location-independent. Two setup passes: the first
+          # bootstraps from source on the zo-less tree and does not
+          # self-validate; the second converges the deps.
+          $portableRoot = Join-Path "portable" $env:PORTABLE_DIR
+          New-Item -ItemType Directory -Force "portable-zipcached" | Out-Null
+          $zipRoot = Join-Path "portable-zipcached" $env:PORTABLE_DIR
+          Copy-Item -LiteralPath $portableRoot -Destination $zipRoot -Recurse
+          $racketExe = Join-Path $zipRoot 'Racket.exe'
+          & $racketExe -N raco -l- raco setup --no-user -D --no-pkg-deps --no-launcher
+          if ($LASTEXITCODE -ne 0) {
+            throw "in-tree setup pass 1 failed with exit $LASTEXITCODE"
+          }
+          & $racketExe -N raco -l- raco setup --no-user -D --no-pkg-deps --no-launcher
+          if ($LASTEXITCODE -ne 0) {
+            throw "in-tree setup pass 2 failed with exit $LASTEXITCODE"
+          }
+          $zos = (Get-ChildItem -LiteralPath $zipRoot -Recurse -Filter *.zo | Measure-Object).Count
+          if ($zos -lt 500) {
+            throw "suspiciously few in-tree zos: $zos"
+          }
+          Write-Host "cached zip payload: $zos in-tree zos"
+          $cachedZipPath = Join-Path "artifacts" $env:CACHED_ZIP_NAME
+          Compress-Archive -Path $zipRoot -DestinationPath $cachedZipPath -Force
+          if ((Get-Item $cachedZipPath).Length -le 0) {
+            throw "cached portable zip is empty: $cachedZipPath"
+          }
+          Get-FileHash $cachedZipPath -Algorithm SHA256
 
       - name: Build Inno Setup installer
         shell: pwsh
@@ -1326,18 +1396,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REPO: 'CutieDeng/win-racket'
-          RELEASE_TAG: 'v9.3.4'
-          RELEASE_NAME: 'Racket 9.3.4 Windows portable'
+          RELEASE_TAG: 'v9.3.5'
+          RELEASE_NAME: 'Racket 9.3.5 Windows portable'
           CREATE_RELEASE: 'true'
           EXPECTED_ASSETS: '2'
+          EXPECTED_ZIPS: '4'
           EXPECTED_EXES: '4'
         run: |
           set -euo pipefail
           command -v gh >/dev/null 2>&1 || { echo 'gh CLI is required on the publish runner'; exit 1; }
           mapfile -t zip_files < <(find "$GITHUB_WORKSPACE/release-assets" -maxdepth 1 -name '*.zip' -type f | sort)
           mapfile -t exe_files < <(find "$GITHUB_WORKSPACE/release-assets" -maxdepth 1 -name '*.exe' -type f | sort)
-          if [ "${#zip_files[@]}" -ne "$EXPECTED_ASSETS" ]; then
-            printf 'Expected %s Windows portable zips, got %s\n' "$EXPECTED_ASSETS" "${#zip_files[@]}"
+          if [ "${#zip_files[@]}" -ne "$EXPECTED_ZIPS" ]; then
+            printf 'Expected %s Windows portable zips, got %s\n' "$EXPECTED_ZIPS" "${#zip_files[@]}"
             printf '  %s\n' "${zip_files[@]}"
             exit 1
           fi
