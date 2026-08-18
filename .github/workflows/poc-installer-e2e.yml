@@ -58,9 +58,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $sw = [Diagnostics.Stopwatch]::StartNew()
-          $p = Start-Process -FilePath (Resolve-Path 'setup-cached.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          $p = Start-Process -FilePath (Resolve-Path 'setup-cached.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=cached-install.log' -Wait -PassThru
           $sw.Stop()
-          if ($p.ExitCode -ne 0) { throw "cached installer exited $($p.ExitCode)" }
+          if ($p.ExitCode -ne 0) {
+            if (Test-Path 'cached-install.log') { Get-Content 'cached-install.log' | Select-Object -Last 40 }
+            throw "cached installer exited $($p.ExitCode)"
+          }
           Write-Host ("CACHED-INSTALL seconds={0:N0}" -f $sw.Elapsed.TotalSeconds)
           $count = (Get-ChildItem -LiteralPath $env:CACHE_ROOT -Recurse -File | Measure-Object).Count
           $mb = (Get-ChildItem -LiteralPath $env:CACHE_ROOT -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
@@ -112,9 +115,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $sw = [Diagnostics.Stopwatch]::StartNew()
-          $p = Start-Process -FilePath (Resolve-Path 'setup-plain.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          $p = Start-Process -FilePath (Resolve-Path 'setup-plain.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=plain-install.log' -Wait -PassThru
           $sw.Stop()
-          if ($p.ExitCode -ne 0) { throw "plain installer exited $($p.ExitCode)" }
+          if ($p.ExitCode -ne 0) {
+            if (Test-Path 'plain-install.log') { Get-Content 'plain-install.log' | Select-Object -Last 40 }
+            throw "plain installer exited $($p.ExitCode)"
+          }
           Write-Host ("PLAIN-INSTALL seconds={0:N0}" -f $sw.Elapsed.TotalSeconds)
           $count = (Get-ChildItem -LiteralPath $env:CACHE_ROOT -Recurse -File | Measure-Object).Count
           Write-Host ("PLAIN-CACHE files={0}" -f $count)
