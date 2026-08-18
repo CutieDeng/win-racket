@@ -21,12 +21,12 @@ jobs:
       contents: read
     env:
       PACKAGE_NAME: 'racket9'
-      SOURCE_VERSION: '9.3.2'
-      FORMULA_VERSION: '9.3.2.1'
-      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.2/racket-minimal-9.3.2-src.tgz'
-      SOURCE_SHA256: '2499b909816914168e0c61d22da7274dbc503ef3dcff32d9811c24b3a7d1d360'
-      ZIP_NAME: 'racket9-9.3.2.1-windows-x86_64.zip'
-      EXE_NAME: 'racket9-9.3.2.1-windows-x86_64-setup.exe'
+      SOURCE_VERSION: '9.3.3'
+      FORMULA_VERSION: '9.3.3.1'
+      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.3/racket-minimal-9.3.3-src.tgz'
+      SOURCE_SHA256: '9ba125c0a0691eb347e427f7e4a3728a831be88639f713681c002c734f5c00c6'
+      ZIP_NAME: 'racket9-9.3.3.1-windows-x86_64.zip'
+      EXE_NAME: 'racket9-9.3.3.1-windows-x86_64-setup.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'x64'
@@ -253,6 +253,13 @@ jobs:
           if (($tlsOut -join "`n") -notmatch 'windows-tls-ok') {
             throw "Windows TLS smoke did not print windows-tls-ok"
           }
+          & $racketExe.FullName -e '(require racket/random/generator) (unless rktrandom-available? (error (quote rktrandom) "rktrandom-available? is #f: librktrandom not linked into Racket.exe")) (define g (make-rgen 42)) (define xs (for/list ([i (in-range 4)]) (rgen-u64 g))) (unless (equal? xs (list 17334047174172577666 1019500725184315962 11076454993390921235 13198794054228246118)) (error (quote rktrandom) "seed-42 xoshiro256++ stream diverges from the Unix reference" xs)) (displayln "windows-rktrandom-ok")' | Tee-Object -Variable rndOut
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows rktrandom smoke failed with exit $LASTEXITCODE"
+          }
+          if (($rndOut -join "`n") -notmatch 'windows-rktrandom-ok') {
+            throw "Windows rktrandom smoke did not print windows-rktrandom-ok"
+          }
           & $racoCommand @racoArgs | Select-Object -First 40
           if ($LASTEXITCODE -ne 0) {
             Write-Warning "raco package listing failed with exit $LASTEXITCODE; keeping portable artifact because Racket smoke check passed"
@@ -474,12 +481,12 @@ jobs:
       contents: read
     env:
       PACKAGE_NAME: 'racket9'
-      SOURCE_VERSION: '9.3.2'
-      FORMULA_VERSION: '9.3.2.1'
-      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.2/racket-minimal-9.3.2-src.tgz'
-      SOURCE_SHA256: '2499b909816914168e0c61d22da7274dbc503ef3dcff32d9811c24b3a7d1d360'
-      ZIP_NAME: 'racket9-9.3.2.1-windows-arm64.zip'
-      EXE_NAME: 'racket9-9.3.2.1-windows-arm64-setup.exe'
+      SOURCE_VERSION: '9.3.3'
+      FORMULA_VERSION: '9.3.3.1'
+      SOURCE_URL: 'https://github.com/CutieDeng/racket/releases/download/v9.3.3/racket-minimal-9.3.3-src.tgz'
+      SOURCE_SHA256: '9ba125c0a0691eb347e427f7e4a3728a831be88639f713681c002c734f5c00c6'
+      ZIP_NAME: 'racket9-9.3.3.1-windows-arm64.zip'
+      EXE_NAME: 'racket9-9.3.3.1-windows-arm64-setup.exe'
       PORTABLE_DIR: 'racket9'
       BUILD_JOBS: '2'
       MSVC_ARCH: 'arm64'
@@ -705,6 +712,13 @@ jobs:
           }
           if (($tlsOut -join "`n") -notmatch 'windows-tls-ok') {
             throw "Windows TLS smoke did not print windows-tls-ok"
+          }
+          & $racketExe.FullName -e '(require racket/random/generator) (unless rktrandom-available? (error (quote rktrandom) "rktrandom-available? is #f: librktrandom not linked into Racket.exe")) (define g (make-rgen 42)) (define xs (for/list ([i (in-range 4)]) (rgen-u64 g))) (unless (equal? xs (list 17334047174172577666 1019500725184315962 11076454993390921235 13198794054228246118)) (error (quote rktrandom) "seed-42 xoshiro256++ stream diverges from the Unix reference" xs)) (displayln "windows-rktrandom-ok")' | Tee-Object -Variable rndOut
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows rktrandom smoke failed with exit $LASTEXITCODE"
+          }
+          if (($rndOut -join "`n") -notmatch 'windows-rktrandom-ok') {
+            throw "Windows rktrandom smoke did not print windows-rktrandom-ok"
           }
           & $racoCommand @racoArgs | Select-Object -First 40
           if ($LASTEXITCODE -ne 0) {
@@ -940,8 +954,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REPO: 'CutieDeng/win-racket'
-          RELEASE_TAG: 'v9.3.2'
-          RELEASE_NAME: 'Racket 9.3.2 Windows portable'
+          RELEASE_TAG: 'v9.3.3'
+          RELEASE_NAME: 'Racket 9.3.3 Windows portable'
           CREATE_RELEASE: 'true'
           EXPECTED_ASSETS: '2'
         run: |
