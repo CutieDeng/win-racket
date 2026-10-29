@@ -12,7 +12,7 @@ and regenerate this repository instead.
 ## Build
 
 The generated workflow builds Racket on `windows-2022, windows-11-arm` for `x86_64, arm64` and uploads
-`racket9-9.3.14.1-windows-x86_64.zip`, `racket9-9.3.14.1-windows-arm64.zip`, `racket9-9.3.14.1-windows-x86_64-cached.zip`, `racket9-9.3.14.1-windows-arm64-cached.zip`, `racket9-9.3.14.1-windows-x86_64-setup.exe`, `racket9-9.3.14.1-windows-arm64-setup.exe`, and `racket9-9.3.14.1-windows-x86_64-setup-cached.exe`, `racket9-9.3.14.1-windows-arm64-setup-cached.exe` as GitHub Actions
+`racket9-9.3.14.2-windows-x86_64.zip`, `racket9-9.3.14.2-windows-arm64.zip`, `racket9-9.3.14.2-windows-x86_64-cached.zip`, `racket9-9.3.14.2-windows-arm64-cached.zip`, `racket9-9.3.14.2-windows-x86_64-setup.exe`, `racket9-9.3.14.2-windows-arm64-setup.exe`, and `racket9-9.3.14.2-windows-x86_64-setup-cached.exe`, `racket9-9.3.14.2-windows-arm64-setup-cached.exe` as GitHub Actions
 artifacts. The `-cached.zip` carries the whole tree compiled in-tree (classic
 `compiled/` dirs, converged with two setup passes), so it starts fast at any
 extraction path; the plain zip stays all-source and smallest. It runs
@@ -25,7 +25,7 @@ installer additionally embeds the system compiled cache prebuilt for the default
 install directory, so installs that keep the defaults skip the install-time
 `raco setup` entirely (recommended for slower machines); the cache is keyed by
 absolute path, so custom `/DIR=`/`/CACHEPATH=` installs fall back to rebuilding
-the cache exactly like the plain installer. Release asset publishing is enabled. The workflow uploads `racket9-9.3.14.1-windows-x86_64.zip`, `racket9-9.3.14.1-windows-arm64.zip`, `racket9-9.3.14.1-windows-x86_64-cached.zip`, `racket9-9.3.14.1-windows-arm64-cached.zip`, `racket9-9.3.14.1-windows-x86_64-setup.exe`, `racket9-9.3.14.1-windows-arm64-setup.exe`, and `racket9-9.3.14.1-windows-x86_64-setup-cached.exe`, `racket9-9.3.14.1-windows-arm64-setup-cached.exe` to `CutieDeng/win-racket` release `release-9.3.14` using the `GITHUB_TOKEN` repository secret.
+the cache exactly like the plain installer. Release asset publishing is enabled. The workflow uploads `racket9-9.3.14.2-windows-x86_64.zip`, `racket9-9.3.14.2-windows-arm64.zip`, `racket9-9.3.14.2-windows-x86_64-cached.zip`, `racket9-9.3.14.2-windows-arm64-cached.zip`, `racket9-9.3.14.2-windows-x86_64-setup.exe`, `racket9-9.3.14.2-windows-arm64-setup.exe`, and `racket9-9.3.14.2-windows-x86_64-setup-cached.exe`, `racket9-9.3.14.2-windows-arm64-setup-cached.exe` to `CutieDeng/win-racket` release `release-9.3.14` using the `GITHUB_TOKEN` repository secret.
 
 ## Regenerate
 
